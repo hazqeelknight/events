@@ -69,8 +69,8 @@ const PublicOrganizerPage: React.FC = () => {
               mb: 3,
               fontSize: '3rem',
               bgcolor: organizer.brand_color || 'primary.main',
-            onClick={() => navigate(`/${organizerSlug}`)}
             }}
+            onClick={() => navigate(`/${organizerSlug}`)}
           >
             {organizer.display_name.charAt(0)}
           </Avatar>

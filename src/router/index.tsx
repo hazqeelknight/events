@@ -103,6 +103,34 @@ export const router = createBrowserRouter([
   },
   {
     path: '/:organizerSlug/:eventTypeSlug',
+  // Events module public routes (aligned with backend root-level URLs)
+  {
+    path: '/:organizerSlug',
+    element: (
+      <React.Suspense fallback={<div>Loading...</div>}>
+        <PublicOrganizerPage />
+      </React.Suspense>
+    ),
+  },
+  {
+    path: '/:organizerSlug/:eventTypeSlug',
+    element: (
+      <React.Suspense fallback={<div>Loading...</div>}>
+        <PublicEventTypePage />
+      </React.Suspense>
+    ),
+  },
+  
+  // Booking management route
+  {
+    path: '/booking/:accessToken/manage',
+    element: (
+      <React.Suspense fallback={<div>Loading...</div>}>
+        <BookingManagementPage />
+      </React.Suspense>
+    ),
+  },
+  
     element: (
       <React.Suspense fallback={<div>Loading...</div>}>
         <PublicEventTypePage />
