@@ -31,13 +31,12 @@ import {
 } from '@mui/icons-material';
 import { useForm, Controller, useFieldArray } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { LoadingSpinner, Button as CustomButton } from '@/components/core';
 import { useCreateEventType, useUpdateEventType, useEventType, useWorkflows } from '../hooks';
 import type { EventTypeFormData, CustomQuestion } from '../types';
 
 interface EventTypeFormProps {
-  eventTypeId?: string;
   mode: 'create' | 'edit';
 }
 
@@ -81,7 +80,8 @@ const QUESTION_TYPES = [
   { value: 'url', label: 'URL' },
 ];
 
-export const EventTypeForm: React.FC<EventTypeFormProps> = ({ eventTypeId, mode }) => {
+export const EventTypeForm: React.FC<EventTypeFormProps> = ({ mode }) => {
+  const { id: eventTypeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [activeAccordion, setActiveAccordion] = useState<string>('basic');
 
@@ -157,9 +157,9 @@ export const EventTypeForm: React.FC<EventTypeFormProps> = ({ eventTypeId, mode 
       setValue('location_type', eventType.location_type);
       setValue('location_details', eventType.location_details);
       setValue('redirect_url_after_booking', eventType.redirect_url_after_booking);
-      setValue('confirmation_workflow', eventType.confirmation_workflow ?? '');
-      setValue('reminder_workflow', eventType.reminder_workflow ?? '');
-      setValue('cancellation_workflow', eventType.cancellation_workflow ?? '');
+      setValue('confirmation_workflow', eventType.confirmation_workflow || '');
+      setValue('reminder_workflow', eventType.reminder_workflow || '');
+      setValue('cancellation_workflow', eventType.cancellation_workflow || '');
       setValue('questions_data', eventType.questions.map(q => ({
         question_text: q.question_text,
         question_type: q.question_type,

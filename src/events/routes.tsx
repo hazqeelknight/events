@@ -14,7 +14,7 @@ const EventsRoutes: React.FC = () => {
     <Routes>
       <Route index element={<EventsOverview />} />
       <Route path="types/new" element={<EventTypeForm mode="create" />} />
-      <Route path="types/:id/edit" element={<EventTypeForm mode="edit" eventTypeId={window.location.pathname.split('/')[3]} />} />
+      <Route path="types/:id/edit" element={<EventTypeForm mode="edit" />} />
       <Route path="types" element={<EventTypes />} />
       <Route path="bookings" element={<Bookings />} />
       <Route path="bookings/:id" element={<BookingDetails bookingId={window.location.pathname.split('/')[3]} />} />
