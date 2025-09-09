@@ -31,6 +31,7 @@ const PublicProfile = React.lazy(() => import('@/users/pages/PublicProfile'));
 const PublicOrganizerPage = React.lazy(() => import('@/events/pages/PublicOrganizerPage'));
 const PublicEventTypePage = React.lazy(() => import('@/events/pages/PublicEventTypePage'));
 const BookingManagementPage = React.lazy(() => import('@/events/pages/BookingManagementPage'));
+
 export const router = createBrowserRouter([
   // Public routes
   {
@@ -92,17 +93,16 @@ export const router = createBrowserRouter([
     ),
   },
   
-  // Public profile route
+  // Public profile route (from users module, keeping /p prefix)
   {
-    path: '/:organizerSlug',
+    path: '/p/:organizerSlug',
     element: (
       <React.Suspense fallback={<div>Loading...</div>}>
-        <PublicOrganizerPage />
+        <PublicProfile />
       </React.Suspense>
     ),
   },
-  {
-    path: '/:organizerSlug/:eventTypeSlug',
+  
   // Events module public routes (aligned with backend root-level URLs)
   {
     path: '/:organizerSlug',
@@ -131,26 +131,9 @@ export const router = createBrowserRouter([
     ),
   },
   
-    element: (
-      <React.Suspense fallback={<div>Loading...</div>}>
-        <PublicEventTypePage />
-      </React.Suspense>
-    ),
-  },
-  
-  // Booking management route
-  {
-    path: '/booking/:accessToken/manage',
-    element: (
-      <React.Suspense fallback={<div>Loading...</div>}>
-        <BookingManagementPage />
-      </React.Suspense>
-    ),
-  },
-  
   // Protected routes with layout
   {
-    path: '/',
+    path: '/dashboard',
     element: (
       <ProtectedRoute>
         <Layout>
@@ -160,10 +143,6 @@ export const router = createBrowserRouter([
         </Layout>
       </ProtectedRoute>
     ),
-  },
-  {
-    path: '/dashboard',
-    element: <Navigate to="/" replace />,
   },
   
   // Settings redirect to user profile
@@ -258,6 +237,16 @@ export const router = createBrowserRouter([
             {React.createElement(workflowsRoutes)}
           </React.Suspense>
         </Layout>
+      </ProtectedRoute>
+    ),
+  },
+  
+  // Root redirect to dashboard for authenticated users
+  {
+    path: '/',
+    element: (
+      <ProtectedRoute>
+        <Navigate to="/dashboard" replace />
       </ProtectedRoute>
     ),
   },
