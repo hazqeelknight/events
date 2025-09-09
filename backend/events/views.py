@@ -15,7 +15,7 @@ from .serializers import (
 )
 from .tasks import process_booking_confirmation, trigger_event_type_workflows
 from .utils import (
-    get_available_time_slots, create_booking_with_validation, 
+    get_available_time_slots, SlotUnavailableError,
     handle_booking_cancellation, handle_booking_rescheduling,
     get_booking_by_access_token, get_client_ip_from_request,
     get_user_agent_from_request, create_booking_audit_log
@@ -278,7 +278,7 @@ def create_booking(request):
     
     if serializer.is_valid():
         try:
-            # Use serializer's create method for atomic booking creation
+            # The serializer's create method handles atomic booking creation and validation
             booking = serializer.save()
             
             # Trigger async post-booking tasks
@@ -297,27 +297,24 @@ def create_booking(request):
             
             return Response(response_data, status=status.HTTP_201_CREATED)
                 
-        except serializers.ValidationError as e:
-            # Handle slot unavailable error
-            if 'This time slot is no longer available' in str(e):
-                # Try waitlist if enabled
-                try:
-                    event_type = get_object_or_404(
-                        EventType,
-                        organizer__profile__organizer_slug=serializer.validated_data['organizer_slug'],
-                        event_type_slug=serializer.validated_data['event_type_slug'],
-                        is_active=True
-                    )
-                    if event_type.enable_waitlist:
-                        return handle_waitlist_request(request, event_type, serializer.validated_data)
-                except:
-                    pass
-                
-                return Response(
-                    {'error': 'This time slot is no longer available'},
-                    status=status.HTTP_409_CONFLICT
+        except SlotUnavailableError:
+            # Handle slot unavailable error - try waitlist if enabled
+            try:
+                from .models import EventType
+                event_type = EventType.objects.get(
+                    organizer__profile__organizer_slug=request.data.get('organizer_slug'),
+                    event_type_slug=request.data.get('event_type_slug'),
+                    is_active=True
                 )
-            raise
+                if event_type.enable_waitlist:
+                    return handle_waitlist_request(request, event_type, request.data)
+            except EventType.DoesNotExist:
+                pass
+            
+            return Response(
+                {'error': 'This time slot is no longer available'},
+                status=status.HTTP_409_CONFLICT
+            )
         except Exception as e:
             logger.error(f"Error creating booking: {str(e)}")
             return Response(
@@ -331,17 +328,26 @@ def create_booking(request):
 def handle_waitlist_request(request, event_type, booking_data):
     """Handle waitlist request when event is full."""
     try:
+        from datetime import timedelta
+        from .models import WaitlistEntry
+        
         # Create waitlist entry
-        start_time = booking_data['start_time']
-        end_time = start_time + timezone.timedelta(minutes=event_type.duration)
+        start_time_str = booking_data.get('start_time')
+        if isinstance(start_time_str, str):
+            from datetime import datetime
+            start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+        else:
+            start_time = start_time_str
+            
+        end_time = start_time + timedelta(minutes=event_type.duration)
         
         waitlist_entry = WaitlistEntry.objects.create(
             event_type=event_type,
             organizer=event_type.organizer,
             desired_start_time=start_time,
             desired_end_time=end_time,
-            invitee_name=booking_data['invitee_name'],
-            invitee_email=booking_data['invitee_email'],
+            invitee_name=booking_data.get('invitee_name', ''),
+            invitee_email=booking_data.get('invitee_email', ''),
             invitee_phone=booking_data.get('invitee_phone', ''),
             invitee_timezone=booking_data.get('invitee_timezone', 'UTC'),
             custom_answers=booking_data.get('custom_answers', {})
@@ -368,6 +374,8 @@ def handle_waitlist_request(request, event_type, booking_data):
 
 def get_waitlist_position(waitlist_entry):
     """Get position in waitlist for a specific entry."""
+    from .models import WaitlistEntry
+    
     earlier_entries = WaitlistEntry.objects.filter(
         event_type=waitlist_entry.event_type,
         desired_start_time=waitlist_entry.desired_start_time,
