@@ -18,6 +18,7 @@ import {
   AccordionDetails,
   IconButton,
   Chip,
+  Alert,
 } from '@mui/material';
 import {
   ExpandMore,
@@ -125,6 +126,7 @@ export const EventTypeForm: React.FC<EventTypeFormProps> = ({ mode }) => {
     },
   });
 
+  const { fields: questionFields, append: appendQuestion, remove: removeQuestion } = useFieldArray({
     control,
     name: 'questions_data',
   });

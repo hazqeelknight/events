@@ -134,7 +134,6 @@ const EventTypeCard: React.FC<EventTypeCardProps> = ({ eventType, onEdit, onDele
             <Visibility sx={{ mr: 1 }} fontSize="small" />
             View Public Page
           </MenuItem>
-          <MenuItem onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/p/${eventType.organizer.profile.organizer_slug}/${eventType.event_type_slug}`); handleMenuClose(); }}>
           <MenuItem onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/${eventType.organizer.profile.organizer_slug}/${eventType.event_type_slug}`); handleMenuClose(); }}>
             <LinkIcon sx={{ mr: 1 }} fontSize="small" />
             Copy Link
