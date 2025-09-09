@@ -148,11 +148,11 @@ export const EventTypeForm: React.FC<EventTypeFormProps> = ({ mode }) => {
       setValue('max_scheduling_horizon', eventType.max_scheduling_horizon);
       setValue('buffer_time_before', eventType.buffer_time_before);
       setValue('buffer_time_after', eventType.buffer_time_after);
-      setValue('max_bookings_per_day', eventType.max_bookings_per_day);
+      setValue('max_bookings_per_day', eventType.max_bookings_per_day ?? undefined);
       setValue('slot_interval_minutes', eventType.slot_interval_minutes);
       setValue('recurrence_type', eventType.recurrence_type);
       setValue('recurrence_rule', eventType.recurrence_rule);
-      setValue('max_occurrences', eventType.max_occurrences);
+      setValue('max_occurrences', eventType.max_occurrences ?? undefined);
       setValue('recurrence_end_date', eventType.recurrence_end_date);
       setValue('location_type', eventType.location_type);
       setValue('location_details', eventType.location_details);
@@ -662,7 +662,7 @@ export const EventTypeForm: React.FC<EventTypeFormProps> = ({ mode }) => {
                   render={({ field }) => (
                     <FormControl fullWidth>
                       <InputLabel>Confirmation Workflow</InputLabel>
-                      <Select {...field} label="Confirmation Workflow">
+                      <Select {...field} label="Confirmation Workflow" value={field.value || ''}>
                         <MenuItem value="">None</MenuItem>
                         {workflows?.map((workflow: any) => (
                           <MenuItem key={workflow.id} value={workflow.id}>
@@ -681,7 +681,7 @@ export const EventTypeForm: React.FC<EventTypeFormProps> = ({ mode }) => {
                   render={({ field }) => (
                     <FormControl fullWidth>
                       <InputLabel>Reminder Workflow</InputLabel>
-                      <Select {...field} label="Reminder Workflow">
+                      <Select {...field} label="Reminder Workflow" value={field.value || ''}>
                         <MenuItem value="">None</MenuItem>
                         {workflows?.map((workflow: any) => (
                           <MenuItem key={workflow.id} value={workflow.id}>
@@ -700,7 +700,7 @@ export const EventTypeForm: React.FC<EventTypeFormProps> = ({ mode }) => {
                   render={({ field }) => (
                     <FormControl fullWidth>
                       <InputLabel>Cancellation Workflow</InputLabel>
-                      <Select {...field} label="Cancellation Workflow">
+                      <Select {...field} label="Cancellation Workflow" value={field.value || ''}>
                         <MenuItem value="">None</MenuItem>
                         {workflows?.map((workflow: any) => (
                           <MenuItem key={workflow.id} value={workflow.id}>
