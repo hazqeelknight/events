@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Container,
@@ -101,14 +101,15 @@ const PublicEventTypePage: React.FC = () => {
   const [isLoadingEventType, setIsLoadingEventType] = useState(true);
   const [eventTypeError, setEventTypeError] = useState<any>(null);
 
-  // Get current date and 7 days ahead for initial availability check
-  const today = new Date();
-  const nextWeek = new Date(today);
-  nextWeek.setDate(today.getDate() + 7);
-
-  const [dateRange, setDateRange] = useState({
-    start_date: today.toISOString().split('T')[0],
-    end_date: nextWeek.toISOString().split('T')[0],
+  // Get current date for initial availability check
+  const [selectedDate] = useState(() => {
+    const today = new Date();
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+    return {
+      start_date: today.toISOString().split('T')[0],
+      end_date: nextWeek.toISOString().split('T')[0],
+    };
   });
 
   // Load event type data
@@ -133,13 +134,13 @@ const PublicEventTypePage: React.FC = () => {
   }, [organizerSlug, eventTypeSlug]);
 
   // Prepare parameters for availability calculation
-  const slotsParams: CalculatedSlotsParams = {
+  const slotsParams: CalculatedSlotsParams = useMemo(() => ({
     event_type_slug: eventTypeSlug || '',
-    start_date: dateRange.start_date,
-    end_date: dateRange.end_date,
+    start_date: selectedDate.start_date,
+    end_date: selectedDate.end_date,
     invitee_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     attendee_count: attendeeCount,
-  };
+  }), [eventTypeSlug, selectedDate.start_date, selectedDate.end_date, attendeeCount]);
 
   // Use availability module's calculated slots hook
   const { data: slotsData, isLoading: isLoadingSlots } = useCalculatedSlots(
@@ -154,7 +155,6 @@ const PublicEventTypePage: React.FC = () => {
     control,
     handleSubmit,
     watch,
-    setValue,
     formState: { errors, isValid },
   } = useForm<BookingFormData>({
     defaultValues: {
@@ -179,12 +179,12 @@ const PublicEventTypePage: React.FC = () => {
   const slotsByDate = React.useMemo(() => {
     if (!slotsData?.available_slots) return {};
     
-    return slotsData.available_slots.reduce((acc, slot) => {
+    return slotsData.available_slots.reduce((acc: Record<string, AvailableSlot[]>, slot: AvailableSlot) => {
       const date = new Date(slot.local_start_time || slot.start_time).toISOString().split('T')[0];
       if (!acc[date]) acc[date] = [];
       acc[date].push(slot);
       return acc;
-    }, {} as Record<string, AvailableSlot[]>);
+    }, {});
   }, [slotsData]);
 
   const handleSlotSelect = (slot: AvailableSlot) => {
@@ -397,14 +397,14 @@ const PublicEventTypePage: React.FC = () => {
                       ) : Object.keys(slotsByDate).length > 0 ? (
                         <Box>
                           {/* Cache performance info */}
-                          {slotsData?.cache_hit && (
+                          {slotsData && 'cache_hit' in slotsData && slotsData.cache_hit && (
                             <Alert severity="info" sx={{ mb: 2 }}>
-                              Loaded from cache ({slotsData.computation_time_ms}ms)
+                              Loaded from cache ({slotsData.computation_time_ms || 0}ms)
                             </Alert>
                           )}
                           
                           {/* Warnings */}
-                          {slotsData?.warnings && slotsData.warnings.length > 0 && (
+                          {slotsData && 'warnings' in slotsData && slotsData.warnings && slotsData.warnings.length > 0 && (
                             <Alert severity="warning" sx={{ mb: 2 }}>
                               {slotsData.warnings.join(', ')}
                             </Alert>
@@ -422,7 +422,7 @@ const PublicEventTypePage: React.FC = () => {
                                 })}
                               </Typography>
                               <Grid container spacing={1}>
-                                {slots.map((slot, index) => (
+                                {(slots as AvailableSlot[]).map((slot: AvailableSlot, index: number) => (
                                   <Grid item key={index}>
                                     <Button
                                       variant="outlined"
@@ -444,7 +444,7 @@ const PublicEventTypePage: React.FC = () => {
                           
                           {/* Slot count info */}
                           <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
-                            {slotsData?.total_slots || 0} available time{(slotsData?.total_slots || 0) !== 1 ? 's' : ''} found
+                            {(slotsData && 'total_slots' in slotsData ? slotsData.total_slots : 0)} available time{((slotsData && 'total_slots' in slotsData ? slotsData.total_slots : 0) !== 1) ? 's' : ''} found
                           </Typography>
                         </Box>
                       ) : (
@@ -485,7 +485,7 @@ const PublicEventTypePage: React.FC = () => {
                                 fullWidth
                                 label="Full Name"
                                 error={!!errors.invitee_name}
-                                helperText={errors.invitee_name?.message}
+                                helperText={errors.invitee_name?.message?.toString()}
                               />
                             )}
                           />
@@ -509,7 +509,7 @@ const PublicEventTypePage: React.FC = () => {
                                 type="email"
                                 label="Email Address"
                                 error={!!errors.invitee_email}
-                                helperText={errors.invitee_email?.message}
+                                helperText={errors.invitee_email?.message?.toString()}
                               />
                             )}
                           />
@@ -563,7 +563,7 @@ const PublicEventTypePage: React.FC = () => {
                                   type="number"
                                   label="Number of Attendees"
                                   error={!!errors.attendee_count}
-                                  helperText={errors.attendee_count?.message}
+                                  helperText={errors.attendee_count?.message?.toString()}
                                   inputProps={{ min: 1, max: eventType.max_attendees }}
                                   onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
                                 />
@@ -573,7 +573,7 @@ const PublicEventTypePage: React.FC = () => {
                         )}
                         
                         {/* Custom Questions */}
-                        {eventType.questions.map((question, index) => (
+                        {eventType.questions.map((question, _index) => (
                           <Grid item xs={12} key={question.id}>
                             <Controller
                               name={`custom_answers.${question.question_text}`}
@@ -592,7 +592,7 @@ const PublicEventTypePage: React.FC = () => {
                                         label={question.question_text}
                                         required={question.is_required}
                                         error={!!errors.custom_answers?.[question.question_text]}
-                                        helperText={errors.custom_answers?.[question.question_text]?.message}
+                                        helperText={errors.custom_answers?.[question.question_text]?.message?.toString()}
                                       />
                                     );
                                   case 'select':
@@ -658,7 +658,7 @@ const PublicEventTypePage: React.FC = () => {
                                               question.question_type === 'url' ? 'url' : 'text'}
                                         required={question.is_required}
                                         error={!!errors.custom_answers?.[question.question_text]}
-                                        helperText={errors.custom_answers?.[question.question_text]?.message}
+                                        helperText={errors.custom_answers?.[question.question_text]?.message?.toString()}
                                         InputLabelProps={
                                           ['date', 'time'].includes(question.question_type) 
                                             ? { shrink: true } 
