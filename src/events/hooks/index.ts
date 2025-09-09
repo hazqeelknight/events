@@ -22,8 +22,8 @@ export const useEventTypes = () => {
   return useQuery({
     queryKey: queryKeys.events.eventTypes(),
     queryFn: async () => {
-      const response = await api.get<EventType[]>('/events/event-types/');
-      return response.data;
+      const response = await api.get<{ results: EventType[] }>('/events/event-types/');
+      return response.data.results;
     },
   });
 };
@@ -95,8 +95,8 @@ export const useBookings = (filters?: Record<string, any>) => {
           if (value) params.append(key, value);
         });
       }
-      const response = await api.get<Booking[]>(`/events/bookings/?${params}`);
-      return response.data;
+      const response = await api.get<{ results: Booking[] }>(`/events/bookings/?${params}`);
+      return response.data.results;
     },
   });
 };
