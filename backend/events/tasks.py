@@ -175,35 +175,45 @@ def process_waitlist_for_cancelled_booking(booking_id):
     try:
         booking = Booking.objects.get(id=booking_id, status='cancelled')
         
-        # Find active waitlist entries for this exact time slot
+        # Find active waitlist entries for this event type
         waitlist_entries = WaitlistEntry.objects.filter(
             event_type=booking.event_type,
             organizer=booking.organizer,
-            desired_start_time=booking.start_time,
-            desired_end_time=booking.end_time,
             status='active'
         ).order_by('created_at')
         
         if waitlist_entries.exists():
-            first_entry = waitlist_entries.first()
+            # Check if there's now capacity for group events
+            current_confirmed_attendees = booking.event_type.bookings.filter(
+                start_time=booking.start_time,
+                status='confirmed'
+            ).aggregate(
+                total_attendees=models.Sum('attendee_count')
+            )['total_attendees'] or 0
             
-            # Notify the first person on waitlist
-            success = first_entry.notify_availability()
+            available_spots = booking.event_type.max_attendees - current_confirmed_attendees
             
-            if success:
-                # Create audit log
-                create_booking_audit_log(
-                    booking=booking,
-                    action='waitlist_converted',
-                    description=f"Notified waitlist entry {first_entry.invitee_name} of available slot",
-                    actor_type='system',
-                    metadata={
-                        'waitlist_entry_id': str(first_entry.id),
-                        'waitlist_email': first_entry.invitee_email
-                    }
-                )
+            if available_spots > 0:
+                first_entry = waitlist_entries.first()
                 
-                return f"Notified {first_entry.invitee_name} from waitlist"
+                # Notify the first person on waitlist
+                success = first_entry.notify_availability()
+                
+                if success:
+                    # Create audit log
+                    create_booking_audit_log(
+                        booking=booking,
+                        action='waitlist_converted',
+                        description=f"Notified waitlist entry {first_entry.invitee_name} of available slot",
+                        actor_type='system',
+                        metadata={
+                            'waitlist_entry_id': str(first_entry.id),
+                            'waitlist_email': first_entry.invitee_email,
+                            'available_spots': available_spots
+                        }
+                    )
+                    
+                    return f"Notified {first_entry.invitee_name} from waitlist"
         
         return f"No active waitlist entries found for booking {booking_id}"
         
@@ -359,6 +369,7 @@ Best regards,
 @shared_task
 def monitor_booking_system_health():
     """Monitor overall booking system health and performance."""
+    from django.conf import settings
     from datetime import timedelta
     
     # Check recent booking creation rate
@@ -404,7 +415,10 @@ def monitor_booking_system_health():
     }
     
     # Alert if issues detected
-    if failed_syncs.count() > 10 or dirty_cache_entries > 100:
+    failed_syncs_threshold = getattr(settings, 'BOOKING_HEALTH_ALERT_FAILED_SYNCS_THRESHOLD', 10)
+    dirty_cache_threshold = getattr(settings, 'BOOKING_HEALTH_ALERT_DIRTY_CACHE_THRESHOLD', 100)
+    
+    if failed_syncs.count() > failed_syncs_threshold or dirty_cache_entries > dirty_cache_threshold:
         alert_admins_of_booking_issues.delay(health_report)
     
     logger.info(f"Booking system health check: {health_report}")

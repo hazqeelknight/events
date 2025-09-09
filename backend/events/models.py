@@ -185,6 +185,24 @@ class EventType(models.Model):
         return f"{self.organizer.email} - {self.name}"
     
     def save(self, *args, **kwargs):
+        # Track availability-affecting field changes
+        availability_affecting_fields = [
+            'duration', 'max_attendees', 'min_scheduling_notice', 'max_scheduling_horizon',
+            'buffer_time_before', 'buffer_time_after', 'max_bookings_per_day',
+            'slot_interval_minutes', 'is_active', 'recurrence_type', 'recurrence_rule',
+            'max_occurrences', 'recurrence_end_date'
+        ]
+        
+        if self.pk:  # Existing instance
+            try:
+                old_instance = EventType.objects.get(pk=self.pk)
+                for field in availability_affecting_fields:
+                    if getattr(self, field) != getattr(old_instance, field):
+                        self._availability_affecting_fields_changed = True
+                        break
+            except EventType.DoesNotExist:
+                pass
+        
         if not self.event_type_slug:
             base_slug = slugify(self.name)
             slug = base_slug
@@ -228,6 +246,17 @@ class EventType(models.Model):
         """Check if this is a group event."""
         return self.max_attendees > 1
     
+    def get_rrule_object(self):
+        """Get parsed RRULE object for recurring events."""
+        if self.recurrence_type == 'none' or not self.recurrence_rule:
+            return None
+        
+        try:
+            from dateutil.rrule import rrulestr
+            return rrulestr(self.recurrence_rule)
+        except Exception:
+            return None
+    
     def can_book_on_date(self, date):
         """Check if this event type can be booked on a specific date."""
         if not self.is_active:
@@ -269,6 +298,7 @@ class CustomQuestion(models.Model):
     question_text = models.CharField(max_length=500)
     question_type = models.CharField(max_length=20, choices=QUESTION_TYPES, default='text')
     is_required = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
     order = models.IntegerField(default=0)
     
     # Options for select/radio questions

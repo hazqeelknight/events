@@ -300,14 +300,14 @@ class WaitlistEntryAdmin(admin.ModelAdmin):
 
 @admin.register(CustomQuestion)
 class CustomQuestionAdmin(admin.ModelAdmin):
-    list_display = ('question_text_short', 'event_type', 'question_type', 'is_required', 'order')
-    list_filter = ('question_type', 'is_required', 'event_type__organizer')
+    list_display = ('question_text_short', 'event_type', 'question_type', 'is_required', 'is_active', 'order')
+    list_filter = ('question_type', 'is_required', 'is_active', 'event_type__organizer')
     search_fields = ('question_text', 'event_type__name')
     readonly_fields = ('created_at', 'updated_at')
     
     fieldsets = (
         ('Question Details', {
-            'fields': ('event_type', 'question_text', 'question_type', 'is_required', 'order')
+            'fields': ('event_type', 'question_text', 'question_type', 'is_required', 'is_active', 'order')
         }),
         ('Options (for select/radio)', {
             'fields': ('options',),

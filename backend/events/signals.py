@@ -127,3 +127,9 @@ def _trigger_calendar_event_deletion(booking):
     """Trigger calendar event deletion task."""
     from apps.integrations.tasks import remove_calendar_event
     remove_calendar_event.delay(booking.id)
+
+
+def _trigger_waitlist_processing(booking):
+    """Trigger waitlist processing for cancelled booking."""
+    from .tasks import process_waitlist_for_cancelled_booking
+    process_waitlist_for_cancelled_booking.delay(booking.id)

@@ -278,67 +278,8 @@ def create_booking(request):
     
     if serializer.is_valid():
         try:
-            # Extract validated data
-            organizer_slug = serializer.validated_data['organizer_slug']
-            event_type_slug = serializer.validated_data['event_type_slug']
-            custom_answers = serializer.validated_data.get('custom_answers', {})
-            
-            # Get event type
-            event_type = get_object_or_404(
-                EventType,
-                organizer__profile__organizer_slug=organizer_slug,
-                event_type_slug=event_type_slug,
-                is_active=True
-            )
-            
-            # Check if slot is full and handle waitlist
-            attendee_count = serializer.validated_data.get('attendee_count', 1)
-            start_time = serializer.validated_data['start_time']
-            
-            # Check availability
-            availability_result = get_available_time_slots(
-                organizer=event_type.organizer,
-                event_type=event_type,
-                start_date=start_time.date(),
-                end_date=start_time.date(),
-                attendee_count=attendee_count,
-                use_cache=False  # Don't use cache for booking validation
-            )
-            
-            available_slots = availability_result.get('slots', [])
-            slot_available = any(
-                slot['start_time'] == start_time for slot in available_slots
-            )
-            
-            if not slot_available:
-                # Check if waitlist is enabled
-                if event_type.enable_waitlist:
-                    return handle_waitlist_request(request, event_type, serializer.validated_data)
-                else:
-                    return Response(
-                        {'error': 'This time slot is no longer available'},
-                        status=status.HTTP_409_CONFLICT
-                    )
-            
-            # Create booking with comprehensive validation
-            booking, created, errors = create_booking_with_validation(
-                event_type=event_type,
-                organizer=event_type.organizer,
-                booking_data=serializer.validated_data,
-                custom_answers=custom_answers
-            )
-            
-            if errors:
-                return Response(
-                    {'errors': errors},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            if not booking:
-                return Response(
-                    {'error': 'Failed to create booking'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+            # Use serializer's create method for atomic booking creation
+            booking = serializer.save()
             
             # Trigger async post-booking tasks
             process_booking_confirmation.delay(booking.id)
@@ -347,8 +288,8 @@ def create_booking(request):
             response_data = BookingSerializer(booking).data
             
             # Add redirect URL if configured
-            if event_type.redirect_url_after_booking:
-                response_data['redirect_url'] = event_type.redirect_url_after_booking
+            if booking.event_type.redirect_url_after_booking:
+                response_data['redirect_url'] = booking.event_type.redirect_url_after_booking
             
             # Add access token for booking management
             response_data['access_token'] = str(booking.access_token)
@@ -356,11 +297,27 @@ def create_booking(request):
             
             return Response(response_data, status=status.HTTP_201_CREATED)
                 
-        except EventType.DoesNotExist:
-            return Response(
-                {'error': 'Event type not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+        except serializers.ValidationError as e:
+            # Handle slot unavailable error
+            if 'This time slot is no longer available' in str(e):
+                # Try waitlist if enabled
+                try:
+                    event_type = get_object_or_404(
+                        EventType,
+                        organizer__profile__organizer_slug=serializer.validated_data['organizer_slug'],
+                        event_type_slug=serializer.validated_data['event_type_slug'],
+                        is_active=True
+                    )
+                    if event_type.enable_waitlist:
+                        return handle_waitlist_request(request, event_type, serializer.validated_data)
+                except:
+                    pass
+                
+                return Response(
+                    {'error': 'This time slot is no longer available'},
+                    status=status.HTTP_409_CONFLICT
+                )
+            raise
         except Exception as e:
             logger.error(f"Error creating booking: {str(e)}")
             return Response(

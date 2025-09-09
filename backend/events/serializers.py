@@ -39,8 +39,8 @@ class EventTypeSerializer(serializers.ModelSerializer):
 
 
 class EventTypeCreateSerializer(serializers.ModelSerializer):
-    questions_data = serializers.ListField(
-        child=serializers.DictField(),
+    questions_data = CustomQuestionSerializer(
+        many=True,
         write_only=True,
         required=False,
         help_text="List of custom questions to create"
@@ -65,11 +65,9 @@ class EventTypeCreateSerializer(serializers.ModelSerializer):
         
         # Create custom questions
         for i, question_data in enumerate(questions_data):
-            CustomQuestion.objects.create(
-                event_type=event_type,
-                order=i,
-                **question_data
-            )
+            question_serializer = CustomQuestionSerializer(data=question_data)
+            if question_serializer.is_valid(raise_exception=True):
+                question_serializer.save(event_type=event_type, order=i)
         
         return event_type
 
@@ -173,7 +171,64 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         
         return attrs
     
-    # Note: create() method removed - handled by create_booking view function
+    def create(self, validated_data):
+        from django.db import transaction
+        from .utils import get_available_time_slots
+        from .models import EventType
+        from django.shortcuts import get_object_or_404
+        
+        # Extract data
+        organizer_slug = validated_data.pop('organizer_slug')
+        event_type_slug = validated_data.pop('event_type_slug')
+        attendees_data = validated_data.pop('attendees_data', [])
+        start_time = validated_data['start_time']
+        attendee_count = validated_data.get('attendee_count', 1)
+        
+        # Get event type
+        event_type = get_object_or_404(
+            EventType,
+            organizer__profile__organizer_slug=organizer_slug,
+            event_type_slug=event_type_slug,
+            is_active=True
+        )
+        
+        # Calculate end time
+        end_time = start_time + timezone.timedelta(minutes=event_type.duration)
+        validated_data['end_time'] = end_time
+        validated_data['event_type'] = event_type
+        validated_data['organizer'] = event_type.organizer
+        
+        with transaction.atomic():
+            # Atomic availability check
+            availability_result = get_available_time_slots(
+                organizer=event_type.organizer,
+                event_type=event_type,
+                start_date=start_time.date(),
+                end_date=start_time.date(),
+                attendee_count=attendee_count,
+                use_cache=False  # Don't use cache for booking validation
+            )
+            
+            available_slots = availability_result.get('slots', [])
+            slot_available = any(
+                slot['start_time'] == start_time for slot in available_slots
+            )
+            
+            if not slot_available:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError("This time slot is no longer available")
+            
+            # Create booking
+            booking = super().create(validated_data)
+            
+            # Create additional attendees for group events
+            for attendee_data in attendees_data:
+                Attendee.objects.create(
+                    booking=booking,
+                    **attendee_data
+                )
+            
+            return booking
 
 
 class BookingManagementSerializer(serializers.ModelSerializer):
