@@ -27,6 +27,10 @@ const ChangePassword = React.lazy(() => import('@/users/pages/ChangePassword'));
 const RespondToInvitation = React.lazy(() => import('@/users/pages/RespondToInvitation'));
 const PublicProfile = React.lazy(() => import('@/users/pages/PublicProfile'));
 
+// Events module public routes
+const PublicOrganizerPage = React.lazy(() => import('@/events/pages/PublicOrganizerPage'));
+const PublicEventTypePage = React.lazy(() => import('@/events/pages/PublicEventTypePage'));
+const BookingManagementPage = React.lazy(() => import('@/events/pages/BookingManagementPage'));
 export const router = createBrowserRouter([
   // Public routes
   {
@@ -93,7 +97,25 @@ export const router = createBrowserRouter([
     path: '/p/:organizerSlug',
     element: (
       <React.Suspense fallback={<div>Loading...</div>}>
-        <PublicProfile />
+        <PublicOrganizerPage />
+      </React.Suspense>
+    ),
+  },
+  {
+    path: '/p/:organizerSlug/:eventTypeSlug',
+    element: (
+      <React.Suspense fallback={<div>Loading...</div>}>
+        <PublicEventTypePage />
+      </React.Suspense>
+    ),
+  },
+  
+  // Booking management route
+  {
+    path: '/booking/:accessToken/manage',
+    element: (
+      <React.Suspense fallback={<div>Loading...</div>}>
+        <BookingManagementPage />
       </React.Suspense>
     ),
   },
