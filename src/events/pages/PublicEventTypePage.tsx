@@ -40,8 +40,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { LoadingSpinner, Button as CustomButton } from '@/components/core';
 import { formatDuration, formatDateTime } from '@/utils/formatters';
-import { usePublicEventType, useAvailableSlots, useCreateBooking } from '../hooks';
+import { useCreateBooking, useCalculatedSlots } from '../hooks';
+import { api } from '@/api/client';
 import type { BookingCreateData, AvailableSlot } from '../types';
+import type { CalculatedSlotsParams } from '@/availability/types';
 
 const steps = ['Select Time', 'Enter Details', 'Confirm'];
 
@@ -60,16 +62,44 @@ interface BookingFormData {
   }>;
 }
 
+interface PublicEventTypeData {
+  name: string;
+  event_type_slug: string;
+  description: string;
+  duration: number;
+  max_attendees: number;
+  enable_waitlist: boolean;
+  location_type: string;
+  location_details: string;
+  min_scheduling_notice: number;
+  max_scheduling_horizon: number;
+  organizer_name: string;
+  organizer_bio: string;
+  organizer_picture?: string;
+  organizer_company: string;
+  organizer_timezone: string;
+  questions: Array<{
+    id: string;
+    question_text: string;
+    question_type: string;
+    is_required: boolean;
+    options: string[];
+  }>;
+  is_group_event: boolean;
+}
+
 const PublicEventTypePage: React.FC = () => {
   const { organizerSlug, eventTypeSlug } = useParams<{ organizerSlug: string; eventTypeSlug: string }>();
   const navigate = useNavigate();
   
   const [activeStep, setActiveStep] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>('');
   const [attendeeCount, setAttendeeCount] = useState(1);
   const [bookingSuccess, setBookingSuccess] = useState(false);
   const [bookingResult, setBookingResult] = useState<any>(null);
+  const [eventType, setEventType] = useState<PublicEventTypeData | null>(null);
+  const [isLoadingEventType, setIsLoadingEventType] = useState(true);
+  const [eventTypeError, setEventTypeError] = useState<any>(null);
 
   // Get current date and 7 days ahead for initial availability check
   const today = new Date();
@@ -81,25 +111,40 @@ const PublicEventTypePage: React.FC = () => {
     end_date: nextWeek.toISOString().split('T')[0],
   });
 
-  // Hooks
-  const { data: eventType, isLoading: isLoadingEventType, error: eventTypeError } = usePublicEventType(
-    organizerSlug || '',
-    eventTypeSlug || '',
-    {
-      ...dateRange,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      attendee_count: attendeeCount,
-    }
-  );
+  // Load event type data
+  useEffect(() => {
+    const loadEventType = async () => {
+      if (!organizerSlug || !eventTypeSlug) return;
+      
+      try {
+        setIsLoadingEventType(true);
+        const response = await api.get(`/events/public/${organizerSlug}/${eventTypeSlug}/`);
+        setEventType(response.data);
+        setEventTypeError(null);
+      } catch (error) {
+        setEventTypeError(error);
+        setEventType(null);
+      } finally {
+        setIsLoadingEventType(false);
+      }
+    };
+    
+    loadEventType();
+  }, [organizerSlug, eventTypeSlug]);
 
-  const { data: slotsData, isLoading: isLoadingSlots } = useAvailableSlots(
+  // Prepare parameters for availability calculation
+  const slotsParams: CalculatedSlotsParams = {
+    event_type_slug: eventTypeSlug || '',
+    start_date: dateRange.start_date,
+    end_date: dateRange.end_date,
+    invitee_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    attendee_count: attendeeCount,
+  };
+
+  // Use availability module's calculated slots hook
+  const { data: slotsData, isLoading: isLoadingSlots } = useCalculatedSlots(
     organizerSlug || '',
-    eventTypeSlug || '',
-    {
-      ...dateRange,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      attendee_count: attendeeCount,
-    }
+    slotsParams
   );
 
   const createBooking = useCreateBooking();
@@ -132,10 +177,10 @@ const PublicEventTypePage: React.FC = () => {
 
   // Group slots by date
   const slotsByDate = React.useMemo(() => {
-    if (!slotsData?.slots) return {};
+    if (!slotsData?.available_slots) return {};
     
-    return slotsData.slots.reduce((acc, slot) => {
-      const date = new Date(slot.start_time).toISOString().split('T')[0];
+    return slotsData.available_slots.reduce((acc, slot) => {
+      const date = new Date(slot.local_start_time || slot.start_time).toISOString().split('T')[0];
       if (!acc[date]) acc[date] = [];
       acc[date].push(slot);
       return acc;
@@ -224,7 +269,7 @@ const PublicEventTypePage: React.FC = () => {
                 {eventType.name}
               </Typography>
               <Typography variant="body2">
-                {formatDateTime(selectedSlot?.start_time || '')}
+                {formatDateTime(selectedSlot?.local_start_time || selectedSlot?.start_time || '')}
               </Typography>
               <Typography variant="body2">
                 Duration: {formatDuration(eventType.duration)}
@@ -266,7 +311,7 @@ const PublicEventTypePage: React.FC = () => {
         <Box sx={{ mb: 4 }}>
           <Button
             startIcon={<ArrowBack />}
-            onClick={() => navigate(`/p/${organizerSlug}`)}
+            onClick={() => navigate(`/${organizerSlug}`)}
             sx={{ mb: 2 }}
           >
             Back to {eventType.organizer_name}
@@ -351,6 +396,20 @@ const PublicEventTypePage: React.FC = () => {
                         <LoadingSpinner message="Loading available times..." />
                       ) : Object.keys(slotsByDate).length > 0 ? (
                         <Box>
+                          {/* Cache performance info */}
+                          {slotsData?.cache_hit && (
+                            <Alert severity="info" sx={{ mb: 2 }}>
+                              Loaded from cache ({slotsData.computation_time_ms}ms)
+                            </Alert>
+                          )}
+                          
+                          {/* Warnings */}
+                          {slotsData?.warnings && slotsData.warnings.length > 0 && (
+                            <Alert severity="warning" sx={{ mb: 2 }}>
+                              {slotsData.warnings.join(', ')}
+                            </Alert>
+                          )}
+                          
                           {Object.entries(slotsByDate).map(([date, slots]) => (
                             <Box key={date} sx={{ mb: 3 }}>
                               <Typography variant="subtitle1" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
@@ -371,7 +430,7 @@ const PublicEventTypePage: React.FC = () => {
                                       onClick={() => handleSlotSelect(slot)}
                                       startIcon={<AccessTime />}
                                     >
-                                      {new Date(slot.start_time).toLocaleTimeString('en-US', {
+                                      {new Date(slot.local_start_time || slot.start_time).toLocaleTimeString('en-US', {
                                         hour: 'numeric',
                                         minute: '2-digit',
                                         hour12: true,
@@ -382,6 +441,11 @@ const PublicEventTypePage: React.FC = () => {
                               </Grid>
                             </Box>
                           ))}
+                          
+                          {/* Slot count info */}
+                          <Typography variant="caption" color="text.secondary" sx={{ mt: 2, display: 'block' }}>
+                            {slotsData?.total_slots || 0} available time{(slotsData?.total_slots || 0) !== 1 ? 's' : ''} found
+                          </Typography>
                         </Box>
                       ) : (
                         <Alert severity="info">
@@ -417,6 +481,7 @@ const PublicEventTypePage: React.FC = () => {
                             render={({ field }) => (
                               <TextField
                                 {...field}
+                                value={field.value || ''}
                                 fullWidth
                                 label="Full Name"
                                 error={!!errors.invitee_name}
@@ -439,6 +504,7 @@ const PublicEventTypePage: React.FC = () => {
                             render={({ field }) => (
                               <TextField
                                 {...field}
+                                value={field.value || ''}
                                 fullWidth
                                 type="email"
                                 label="Email Address"
@@ -455,6 +521,7 @@ const PublicEventTypePage: React.FC = () => {
                             render={({ field }) => (
                               <TextField
                                 {...field}
+                                value={field.value || ''}
                                 fullWidth
                                 label="Phone Number (optional)"
                               />
@@ -468,6 +535,7 @@ const PublicEventTypePage: React.FC = () => {
                             render={({ field }) => (
                               <TextField
                                 {...field}
+                                value={field.value || ''}
                                 fullWidth
                                 label="Timezone"
                                 disabled
@@ -490,6 +558,7 @@ const PublicEventTypePage: React.FC = () => {
                               render={({ field }) => (
                                 <TextField
                                   {...field}
+                                  value={field.value || 1}
                                   fullWidth
                                   type="number"
                                   label="Number of Attendees"
@@ -516,6 +585,7 @@ const PublicEventTypePage: React.FC = () => {
                                     return (
                                       <TextField
                                         {...field}
+                                        value={field.value || ''}
                                         fullWidth
                                         multiline
                                         rows={3}
@@ -531,6 +601,7 @@ const PublicEventTypePage: React.FC = () => {
                                         <InputLabel>{question.question_text}</InputLabel>
                                         <Select
                                           {...field}
+                                          value={field.value || ''}
                                           label={question.question_text}
                                           error={!!errors.custom_answers?.[question.question_text]}
                                         >
@@ -577,6 +648,7 @@ const PublicEventTypePage: React.FC = () => {
                                     return (
                                       <TextField
                                         {...field}
+                                        value={field.value || ''}
                                         fullWidth
                                         label={question.question_text}
                                         type={question.question_type === 'email' ? 'email' : 
@@ -628,7 +700,7 @@ const PublicEventTypePage: React.FC = () => {
                           <strong>{eventType.name}</strong>
                         </Typography>
                         <Typography variant="body2">
-                          {selectedSlot && formatDateTime(selectedSlot.start_time)}
+                          {selectedSlot && formatDateTime(selectedSlot.local_start_time || selectedSlot.start_time)}
                         </Typography>
                         <Typography variant="body2">
                           Duration: {formatDuration(eventType.duration)}
@@ -670,7 +742,7 @@ const PublicEventTypePage: React.FC = () => {
                               Additional Information
                             </Typography>
                             {Object.entries(watchedValues.custom_answers).map(([question, answer]) => (
-                              <Typography variant="body2" key={question}>
+                              <Typography variant="body2" key={question} sx={{ mb: 1 }}>
                                 <strong>{question}:</strong> {Array.isArray(answer) ? answer.join(', ') : answer}
                               </Typography>
                             ))}
@@ -714,7 +786,7 @@ const PublicEventTypePage: React.FC = () => {
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                     <CalendarToday sx={{ mr: 1, fontSize: 16 }} />
-                    {formatDateTime(selectedSlot.start_time)}
+                    {formatDateTime(selectedSlot.local_start_time || selectedSlot.start_time)}
                   </Typography>
                   <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center' }}>
                     <Schedule sx={{ mr: 1, fontSize: 16 }} />

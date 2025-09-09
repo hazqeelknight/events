@@ -143,7 +143,17 @@ export interface AvailableSlot {
   start_time: string;
   end_time: string;
   duration_minutes: number;
-  available_spots: number;
+  local_start_time?: string;
+  local_end_time?: string;
+  invitee_times?: Record<string, {
+    start_time: string;
+    end_time: string;
+    start_hour: number;
+    end_hour: number;
+    is_reasonable: boolean;
+  }>;
+  fairness_score?: number;
+  available_spots?: number;
 }
 
 export interface PublicOrganizer {

@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { queryKeys } from '@/api/queryClient';
 import { toast } from 'react-toastify';
+import type { CalculatedSlotsParams } from '@/availability/types';
 import type {
   EventType,
   EventTypeFormData,
@@ -218,6 +219,28 @@ export const useAvailableSlots = (
       return response.data;
     },
     enabled: !!organizerSlug && !!eventSlug && !!params.start_date && !!params.end_date,
+  });
+};
+
+// Re-export availability hook for backward compatibility
+export const useCalculatedSlots = (organizerSlug: string, params: CalculatedSlotsParams) => {
+  return useQuery({
+    queryKey: ['calculated-slots', organizerSlug, params],
+    queryFn: async () => {
+      const searchParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            searchParams.append(key, value.join(','));
+          } else {
+            searchParams.append(key, value.toString());
+          }
+        }
+      });
+      const response = await api.get(`/availability/calculated-slots/${organizerSlug}/?${searchParams}`);
+      return response.data;
+    },
+    enabled: !!organizerSlug && !!params.event_type_slug && !!params.start_date && !!params.end_date,
   });
 };
 
