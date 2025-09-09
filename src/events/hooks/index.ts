@@ -285,8 +285,8 @@ export const useWorkflows = () => {
   return useQuery({
     queryKey: ['workflows'],
     queryFn: async () => {
-      const response = await api.get('/workflows/');
-      return response.data;
+      const response = await api.get<{ results: any[] }>('/workflows/');
+      return response.data.results;
     },
   });
 };
