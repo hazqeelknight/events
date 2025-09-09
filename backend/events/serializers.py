@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.utils import timezone
+import datetime
 from django.forms.models import model_to_dict
 from .models import EventType, Booking, Attendee, WaitlistEntry, CustomQuestion
 from apps.users.serializers import UserSerializer
@@ -112,7 +113,7 @@ class BookingSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     can_cancel = serializers.BooleanField(source='can_be_cancelled', read_only=True)
     can_reschedule = serializers.BooleanField(source='can_be_rescheduled', read_only=True)
-    is_access_token_valid = serializers.BooleanField(source='is_access_token_valid', read_only=True)
+    is_access_token_valid = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = Booking
@@ -176,6 +177,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         from .utils import get_available_time_slots
         from .models import EventType
         from django.shortcuts import get_object_or_404
+        from rest_framework.exceptions import ValidationError
         
         # Extract data
         organizer_slug = validated_data.pop('organizer_slug')
@@ -183,6 +185,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         attendees_data = validated_data.pop('attendees_data', [])
         start_time = validated_data['start_time']
         attendee_count = validated_data.get('attendee_count', 1)
+        invitee_timezone = validated_data['invitee_timezone']
         
         # Get event type
         event_type = get_object_or_404(
@@ -205,17 +208,22 @@ class BookingCreateSerializer(serializers.ModelSerializer):
                 event_type=event_type,
                 start_date=start_time.date(),
                 end_date=start_time.date(),
+                invitee_timezone=invitee_timezone,
                 attendee_count=attendee_count,
                 use_cache=False  # Don't use cache for booking validation
             )
             
             available_slots = availability_result.get('slots', [])
+            
+            # Convert both datetime objects to UTC for accurate comparison
+            start_time_utc = start_time.astimezone(datetime.timezone.utc)
+            
             slot_available = any(
-                slot['start_time'] == start_time for slot in available_slots
+                slot['start_time'].astimezone(datetime.timezone.utc) == start_time_utc 
+                for slot in available_slots
             )
             
             if not slot_available:
-                from rest_framework.exceptions import ValidationError
                 raise ValidationError("This time slot is no longer available")
             
             # Create booking
