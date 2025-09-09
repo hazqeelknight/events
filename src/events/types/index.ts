@@ -214,6 +214,17 @@ export interface BookingAnalytics {
   };
 }
 
+// Form-specific types (without read-only fields)
+export interface CustomQuestionForm {
+  question_text: string;
+  question_type: 'text' | 'textarea' | 'select' | 'multiselect' | 'checkbox' | 'radio' | 'email' | 'phone' | 'number' | 'date' | 'time' | 'url';
+  is_required: boolean;
+  order: number;
+  options: string[];
+  conditions: any[];
+  validation_rules: Record<string, any>;
+}
+
 // Form Data Types
 export interface EventTypeFormData {
   name: string;
@@ -239,7 +250,7 @@ export interface EventTypeFormData {
   confirmation_workflow?: string;
   reminder_workflow?: string;
   cancellation_workflow?: string;
-  questions_data: Omit<CustomQuestion, 'id'>[];
+  questions_data: CustomQuestionForm[];
 }
 
 export interface BookingCreateData {

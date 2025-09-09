@@ -48,7 +48,7 @@ const PublicOrganizerPage: React.FC = () => {
   }
 
   const handleEventTypeClick = (eventSlug: string) => {
-    navigate(`/p/${organizerSlug}/${eventSlug}`);
+    navigate(`/${organizerSlug}/${eventSlug}`);
   };
 
   return (
@@ -69,6 +69,7 @@ const PublicOrganizerPage: React.FC = () => {
               mb: 3,
               fontSize: '3rem',
               bgcolor: organizer.brand_color || 'primary.main',
+            onClick={() => navigate(`/${organizerSlug}`)}
             }}
           >
             {organizer.display_name.charAt(0)}

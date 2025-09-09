@@ -94,7 +94,7 @@ export const router = createBrowserRouter([
   
   // Public profile route
   {
-    path: '/p/:organizerSlug',
+    path: '/:organizerSlug',
     element: (
       <React.Suspense fallback={<div>Loading...</div>}>
         <PublicOrganizerPage />
@@ -102,7 +102,7 @@ export const router = createBrowserRouter([
     ),
   },
   {
-    path: '/p/:organizerSlug/:eventTypeSlug',
+    path: '/:organizerSlug/:eventTypeSlug',
     element: (
       <React.Suspense fallback={<div>Loading...</div>}>
         <PublicEventTypePage />

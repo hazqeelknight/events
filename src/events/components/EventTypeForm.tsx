@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Box,
   Card,
-  CardContent,
   TextField,
   FormControl,
   InputLabel,
@@ -19,7 +18,6 @@ import {
   AccordionDetails,
   IconButton,
   Chip,
-  Alert,
 } from '@mui/material';
 import {
   ExpandMore,
@@ -34,7 +32,7 @@ import { motion } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import { LoadingSpinner, Button as CustomButton } from '@/components/core';
 import { useCreateEventType, useUpdateEventType, useEventType, useWorkflows } from '../hooks';
-import type { EventTypeFormData, CustomQuestion } from '../types';
+import type { EventTypeFormData } from '../types';
 
 interface EventTypeFormProps {
   mode: 'create' | 'edit';
@@ -127,7 +125,6 @@ export const EventTypeForm: React.FC<EventTypeFormProps> = ({ mode }) => {
     },
   });
 
-  const { fields: questionFields, append: appendQuestion, remove: removeQuestion, move: moveQuestion } = useFieldArray({
     control,
     name: 'questions_data',
   });
